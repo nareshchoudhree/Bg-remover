@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ultra Realistic Background Remover</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #1e1e2f, #2a2a4a);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow-x: hidden;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(15px);
+            border-radius: 20px;
+            padding: 2rem;
+            width: 90%;
+            max-width: 800px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        h1 {
+            color: #ffffff;
+            text-align: center;
+            font-size: 2.5rem;
+            margin-bottom: 1.5rem;
+            text-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+        }
+
+        .upload-area {
+            border: 2px dashed rgba(255, 255, 255, 0.3);
+            border-radius: 15px;
+            padding: 2rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .upload-area:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: #ffffff;
+        }
+
+        .upload-area.dragover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: scale(1.02);
+        }
+
+        .upload-area input {
+            display: none;
+        }
+
+        .upload-area p {
+            color: #cccccc;
+            font-size: 1.2rem;
+            margin-bottom: 1rem;
+        }
+
+        .preview {
+            margin-top: 2rem;
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .image-container {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            padding: 1rem;
+            max-width: 45%;
+            text-align: center;
+        }
+
+        .image-container img {
+            max-width: 100%;
+            border-radius: 8px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .image-container p {
+            color: #ffffff;
+            margin-top: 0.5rem;
+            font-size: 1rem;
+        }
+
+        .button {
+            display: inline-block;
+            padding: 0.8rem 2rem;
+            background: linear-gradient(45deg, #ff6b6b, #ff8e53);
+            color: #ffffff;
+            text-decoration: none;
+            border-radius: 50px;
+            font-weight: 600;
+            margin-top: 1.5rem;
+            transition: all 0.3s ease;
+            border: none;
+            cursor: pointer;
+        }
+
+        .button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(255, 107, 107, 0.4);
+        }
+
+        .button:disabled {
+            background: #666;
+            cursor: not-allowed;
+        }
+
+        .loader {
+            display: none;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #ff6b6b;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 1rem auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                padding: 1.5rem;
+            }
+
+            h1 {
+                font-size: 1.8rem;
+            }
+
+            .image-container {
+                max-width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Background Remover</h1>
+        <div class="upload-area" id="uploadArea">
+            <input type="file" id="imageInput" accept="image/*">
+            <p>Drag & Drop or Click to Upload an Image</p>
+        </div>
+        <div class="loader" id="loader"></div>
+        <div class="preview" id="preview">
+            <!-- Images will be added here dynamically -->
+        </div>
+        <button class="button" id="downloadButton" style="display: none;">Download Image</button>
+    </div>
+
+    <script>
+        const uploadArea = document.getElementById('uploadArea');
+        const imageInput = document.getElementById('imageInput');
+        const preview = document.getElementById('preview');
+        const loader = document.getElementById('loader');
+        const downloadButton = document.getElementById('downloadButton');
+        let processedImage = null;
+
+        // Replace with your remove.bg API key
+        const API_KEY = 'Qp8MrdkR6JMzLcpbK7k28jB2'; // Get your API key from https://www.remove.bg/api
+
+        // Drag and Drop Events
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const file = e.dataTransfer.files[0];
+            if (file && file.type.startsWith('image/')) {
+                processImage(file);
+            }
+        });
+
+        // Click to Upload
+        uploadArea.addEventListener('click', () => imageInput.click());
+        imageInput.addEventListener('change', () => {
+            if (imageInput.files.length > 0) {
+                processImage(imageInput.files[0]);
+            }
+        });
+
+        async function processImage(file) {
+            loader.style.display = 'block';
+            preview.innerHTML = '';
+            downloadButton.style.display = 'none';
+
+            const img = new Image();
+            img.src = URL.createObjectURL(file);
+
+            img.onload = async () => {
+                // Display original image
+                const originalContainer = document.createElement('div');
+                originalContainer.className = 'image-container';
+                originalContainer.innerHTML = `<p>Original Image</p>`;
+                originalContainer.appendChild(img.cloneNode());
+                preview.appendChild(originalContainer);
+
+                // Remove background using remove.bg API
+                try {
+                    const formData = new FormData();
+                    formData.append('image_file', file);
+                    formData.append('size', 'auto');
+
+                    const response = await fetch('https://api.remove.bg/v1.0/removebg', {
+                        method: 'POST',
+                        headers: {
+                            'X-Api-Key': API_KEY
+                        },
+                        body: formData
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('Failed to remove background');
+                    }
+
+                    const blob = await response.blob();
+                    processedImage = URL.createObjectURL(blob);
+
+                    // Display processed image
+                    const processedImg = new Image();
+                    processedImg.src = processedImage;
+                    const processedContainer = document.createElement('div');
+                    processedContainer.className = 'image-container';
+                    processedContainer.innerHTML = `<p>Background Removed</p>`;
+                    processedContainer.appendChild(processedImg);
+                    preview.appendChild(processedContainer);
+
+                    loader.style.display = 'none';
+                    downloadButton.style.display = 'inline-block';
+                } catch (error) {
+                    console.error('Error:', error);
+                    alert('Failed to remove background. Please check your API key or try again later.');
+                    loader.style.display = 'none';
+                }
+            };
+        }
+
+        // Download processed image
+        downloadButton.addEventListener('click', () => {
+            if (processedImage) {
+                const link = document.createElement('a');
+                link.href = processedImage;
+                link.download = 'background-removed.png';
+                link.click();
+            }
+        });
+    </script>
+</body>
+</html>
